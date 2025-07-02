@@ -1,6 +1,6 @@
-# 📸 UnityImagePickerLib
+# 📸 Unity Image Picker Library
 
-**UnityImagePickerLib** is a Unity-native Android plugin that allows seamless image selection from the **gallery or camera**, with **built-in cropping support**, permission handling, and image import directly into Unity’s `RawImage` UI component.
+**Unity-Image-Picker-Lib** is a Unity-native Android plugin that allows seamless image selection from the **gallery or camera**, with **built-in cropping support**, permission handling, and image import directly into Unity’s `RawImage` UI component.
 
 ---
 
