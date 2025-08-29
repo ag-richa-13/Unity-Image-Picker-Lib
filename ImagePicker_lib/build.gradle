@@ -27,6 +27,7 @@ android {
 
 dependencies {
     compileOnly(files("C:/Program Files/Unity/Hub/Editor/6000.0.23f1/Editor/Data/PlaybackEngines/AndroidPlayer/Variations/il2cpp/Release/Classes/classes.jar"))
+    implementation libs.exifinterface
     implementation libs.appcompat
     implementation libs.material
     testImplementation libs.junit

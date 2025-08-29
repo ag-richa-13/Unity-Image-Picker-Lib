@@ -1,8 +1,9 @@
 package com.myteam11.imagepicker_lib;
 
+import android.Manifest;
 import android.app.Activity;
-import android.content.ContentResolver;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
@@ -11,7 +12,10 @@ import android.util.Log;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 
 import com.unity3d.player.UnityPlayer;
@@ -21,7 +25,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -35,25 +38,55 @@ public class ImagePickerActivity extends AppCompatActivity {
     public static final String MODE_GALLERY = "mode_gallery";
     public static final String MODE_CAMERA = "mode_camera";
     private static final String TAG = "ImagePickerActivity";
+    private static final int CAMERA_PERMISSION_REQUEST_CODE = 1001;
 
     private String unityGameObject, unitySuccessCallback, unityFailureCallback;
     private Uri cameraImageUri;
     private ActivityResultLauncher<Intent> galleryLauncher;
     private ActivityResultLauncher<Uri> cameraLauncher;
+    private String pendingMode = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Intent intent = getIntent();
-        String mode = intent.getStringExtra(EXTRA_MODE);
+        pendingMode = intent.getStringExtra(EXTRA_MODE);
         unityGameObject = intent.getStringExtra(EXTRA_GAME_OBJECT);
         unitySuccessCallback = intent.getStringExtra(EXTRA_SUCCESS_CALLBACK);
         unityFailureCallback = intent.getStringExtra(EXTRA_FAILURE_CALLBACK);
+
         registerLaunchers();
+
         if (savedInstanceState == null) {
-            if (MODE_GALLERY.equals(mode)) launchGallery();
-            else if (MODE_CAMERA.equals(mode)) launchCamera();
-            else { fail("Invalid mode specified."); }
+            if (MODE_CAMERA.equals(pendingMode)) {
+                checkAndRequestCameraPermission();
+            } else if (MODE_GALLERY.equals(pendingMode)) {
+                launchGallery();
+            } else {
+                fail("Invalid mode specified.");
+                finish();
+            }
+        }
+    }
+
+    private void checkAndRequestCameraPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
+        } else {
+            launchCamera();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == CAMERA_PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                launchCamera();
+            } else {
+                fail("Camera permission denied.");
+                finish();
+            }
         }
     }
 
@@ -95,7 +128,10 @@ public class ImagePickerActivity extends AppCompatActivity {
             cam.putExtra(MediaStore.EXTRA_OUTPUT, cameraImageUri);
             cam.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             cameraLauncher.launch(cameraImageUri);
-        } else { fail("Could not create file for camera image."); finish(); }
+        } else {
+            fail("Could not create file for camera image.");
+            finish();
+        }
     }
 
     private Uri createImageFileUri() {
@@ -125,6 +161,7 @@ public class ImagePickerActivity extends AppCompatActivity {
                 int len;
                 while ((len = in.read(buf)) > 0) out.write(buf, 0, len);
             }
+
             if (dst.length() > 5 * 1024 * 1024) {
                 BitmapFactory.Options options = new BitmapFactory.Options();
                 android.graphics.Bitmap bmp = BitmapFactory.decodeFile(dst.getAbsolutePath(), options);
@@ -139,6 +176,7 @@ public class ImagePickerActivity extends AppCompatActivity {
                 }
                 return cmp.getAbsolutePath();
             }
+
             return dst.getAbsolutePath();
         } catch (IOException e) {
             Log.e(TAG, "copyUriToCache failed", e);

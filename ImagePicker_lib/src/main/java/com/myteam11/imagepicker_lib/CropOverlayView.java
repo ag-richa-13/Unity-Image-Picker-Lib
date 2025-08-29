@@ -10,18 +10,16 @@ public class CropOverlayView extends View {
     private RectF rect;
     private Bitmap bmp;
 
-    private static final int HANDLE_TOUCH_AREA = 40;
-    private static final int HANDLE_RADIUS = 15;
-
-    private enum DragMode { NONE, MOVE, RESIZE_LT, RESIZE_RT, RESIZE_LB, RESIZE_RB }
-    private DragMode mode = DragMode.NONE;
+    private static final int HANDLE_TOUCH_AREA = 60;
+    private static final int HANDLE_RADIUS = 20;
+    private enum Mode { NONE, MOVE, LT, RT, LB, RB }
+    private Mode mode = Mode.NONE;
     private float lastX, lastY;
 
     public CropOverlayView(Context ctx) {
         super(ctx);
         setLayerType(LAYER_TYPE_HARDWARE, null);
-        border = new Paint(); border.setColor(Color.WHITE);
-        border.setStyle(Paint.Style.STROKE); border.setStrokeWidth(4);
+        border = new Paint(); border.setColor(Color.WHITE); border.setStyle(Paint.Style.STROKE); border.setStrokeWidth(5);
         dim = new Paint(); dim.setColor(Color.parseColor("#A6000000"));
         handlePaint = new Paint(); handlePaint.setColor(Color.WHITE);
         rect = new RectF(200, 400, 800, 1000);
@@ -40,8 +38,6 @@ public class CropOverlayView extends View {
         c.drawRect(rect, clear);
         clear.setXfermode(null);
         c.drawRect(rect, border);
-
-        // Draw handles
         c.drawCircle(rect.left, rect.top, HANDLE_RADIUS, handlePaint);
         c.drawCircle(rect.right, rect.top, HANDLE_RADIUS, handlePaint);
         c.drawCircle(rect.left, rect.bottom, HANDLE_RADIUS, handlePaint);
@@ -58,56 +54,66 @@ public class CropOverlayView extends View {
                 return true;
             case MotionEvent.ACTION_MOVE:
                 float dx = x - lastX, dy = y - lastY;
-                switch (mode) {
+                switch(mode) {
                     case MOVE: rect.offset(dx, dy); break;
-                    case RESIZE_LT: rect.left += dx; rect.top += dy; break;
-                    case RESIZE_RT: rect.right += dx; rect.top += dy; break;
-                    case RESIZE_LB: rect.left += dx; rect.bottom += dy; break;
-                    case RESIZE_RB: rect.right += dx; rect.bottom += dy; break;
-                    default: break;
+                    case LT: rect.left += dx; rect.top += dy; break;
+                    case RT: rect.right += dx; rect.top += dy; break;
+                    case LB: rect.left += dx; rect.bottom += dy; break;
+                    case RB: rect.right += dx; rect.bottom += dy; break;
                 }
-                constrainRect();
+                constrain();
                 lastX = x; lastY = y;
                 invalidate();
                 return true;
             case MotionEvent.ACTION_UP:
-                mode = DragMode.NONE;
+                mode = Mode.NONE;
                 return true;
         }
         return false;
     }
 
-    private DragMode detectMode(float x, float y) {
-        if (near(x, y, rect.left, rect.top)) return DragMode.RESIZE_LT;
-        if (near(x, y, rect.right, rect.top)) return DragMode.RESIZE_RT;
-        if (near(x, y, rect.left, rect.bottom)) return DragMode.RESIZE_LB;
-        if (near(x, y, rect.right, rect.bottom)) return DragMode.RESIZE_RB;
-        if (rect.contains(x, y)) return DragMode.MOVE;
-        return DragMode.NONE;
+    private Mode detectMode(float x, float y) {
+        if (near(x, y, rect.left, rect.top)) return Mode.LT;
+        if (near(x, y, rect.right, rect.top)) return Mode.RT;
+        if (near(x, y, rect.left, rect.bottom)) return Mode.LB;
+        if (near(x, y, rect.right, rect.bottom)) return Mode.RB;
+        if (rect.contains(x, y)) return Mode.MOVE;
+        return Mode.NONE;
     }
 
     private boolean near(float x, float y, float cx, float cy) {
         return Math.hypot(x - cx, y - cy) <= HANDLE_TOUCH_AREA;
     }
 
-    private void constrainRect() {
-        float minSize = 100;
-        if (rect.width() < minSize) rect.right = rect.left + minSize;
-        if (rect.height() < minSize) rect.bottom = rect.top + minSize;
-        if (rect.left < 0) { rect.right -= rect.left; rect.left = 0; }
-        if (rect.top < 0) { rect.bottom -= rect.top; rect.top = 0; }
-        if (rect.right > getWidth()) rect.right = getWidth();
-        if (rect.bottom > getHeight()) rect.bottom = getHeight();
+    private void constrain() {
+        float min = 150;
+        if (rect.width() < min) rect.right = rect.left + min;
+        if (rect.height() < min) rect.bottom = rect.top + min;
+        if (rect.left < 0) rect.offset(-rect.left, 0);
+        if (rect.top < 0) rect.offset(0, -rect.top);
+        if (rect.right > getWidth()) rect.offset(getWidth() - rect.right, 0);
+        if (rect.bottom > getHeight()) rect.offset(0, getHeight() - rect.bottom);
     }
 
     public Bitmap getCroppedBitmap() {
         if (bmp == null) return null;
-        float sx = (float) bmp.getWidth() / getWidth();
-        float sy = (float) bmp.getHeight() / getHeight();
-        int x = Math.max(0, (int)(rect.left * sx));
-        int y = Math.max(0, (int)(rect.top * sy));
-        int w = Math.min((int)(rect.width() * sx), bmp.getWidth() - x);
-        int h = Math.min((int)(rect.height() * sy), bmp.getHeight() - y);
+        float vw = getWidth(), vh = getHeight();
+        float iw = bmp.getWidth(), ih = bmp.getHeight();
+        float scale = Math.min(vw / iw, vh / ih);
+        float dw = iw * scale, dh = ih * scale;
+        float ox = (vw - dw) / 2f, oy = (vh - dh) / 2f;
+
+        float lx = (rect.left - ox) / scale;
+        float ty = (rect.top - oy) / scale;
+        float rw = rect.width() / scale;
+        float rh = rect.height() / scale;
+
+        int x = Math.max(0, Math.round(lx));
+        int y = Math.max(0, Math.round(ty));
+        int w = Math.min(Math.round(rw), bmp.getWidth() - x);
+        int h = Math.min(Math.round(rh), bmp.getHeight() - y);
+
+        if (w <= 0 || h <= 0) return null;
         return Bitmap.createBitmap(bmp, x, y, w, h);
     }
 }
